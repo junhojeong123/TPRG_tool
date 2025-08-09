@@ -1,0 +1,16 @@
+# Python
+**/venv/
+**/__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Node/Flutter (있으면)
+node_modules/
+dist/
+build/
+.dart_tool/
+
+# Common
+.env
+.DS_Store
