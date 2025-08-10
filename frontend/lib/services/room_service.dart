@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// RoomService: 'POST /rooms' 같은 방 관련 API 호출을 담당합니다.
 class RoomService {
   // 백엔드 서버의 베이스 URL (환경별로 바꿀 수 있게 수정하세요)
-  static const _baseUrl = 'http://127.0.0.1:3000';
+  static const _baseUrl = 'http://127.0.0.1:4000';
 
   /// 새 방을 생성하는 API 호출
   /// 성공 시 생성된 Room 객체를, 실패 시 예외를 던집니다.

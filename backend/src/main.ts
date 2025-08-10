@@ -30,7 +30,7 @@ async function bootstrap() {
     }
   }
 
-  const port = configService.get<number>('HTTP_SERVER_POST', 3000);
+  const port = configService.get<number>('HTTP_SERVER_POST', 4000);
   const frontEndOrigin = configService.get<string>(
     'FRONTEND_ORIGIN',
     'http://localhost:3000',
@@ -39,6 +39,7 @@ async function bootstrap() {
     origin: [
       frontEndOrigin,
       'http://localhost:3000',
+      'http://127.0.0.1:3000',
     ],
     // methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     credentials: true,
@@ -64,6 +65,6 @@ async function bootstrap() {
   const documentFactory = () => SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api-docs', app, documentFactory);
 
-  await app.listen(3000, '0.0.0.0');
+  await app.listen(port, '0.0.0.0');
 }
 bootstrap();

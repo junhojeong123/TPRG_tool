@@ -1,4 +1,5 @@
 import 'dart:math';
+import '../services/chat_service.dart';
 import '../models/room.dart';
 import 'package:flutter/material.dart';
 import '../widgets/character_sheet_widget.dart';
@@ -15,6 +16,7 @@ class RoomScreen extends StatefulWidget {
 }
 
 class _RoomScreenState extends State<RoomScreen> {
+  late final ChatService _chatService;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final TextEditingController _chatController = TextEditingController();
 
@@ -82,15 +84,33 @@ class _RoomScreenState extends State<RoomScreen> {
     '현금': TextEditingController(text: '0'),
   };
 
-  void _handleSendClick() {
+  @override
+  void initState() {
+    super.initState();
+    _chatService = ChatService(
+      baseUrl: 'http://localhost:4000',
+    ); // Adjust if needed
+  }
+
+  void _handleSendClick() async {
     final text = _chatController.text.trim();
     if (text.isEmpty) return;
-    // TODO: 채팅 전송 로직 추가
-    print('Send chat: $text');
-    _chatController.clear();
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text('채팅이 전송되었습니다!')));
+
+    try {
+      await _chatService.sendChatMessage(
+        widget.room.name,
+        '플레이어이름', // Replace with actual nickname or user ID if available
+        text,
+      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('채팅이 전송되었습니다!')));
+      _chatController.clear();
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('채팅 전송 실패: $e')));
+    }
   }
 
   @override
@@ -101,15 +121,6 @@ class _RoomScreenState extends State<RoomScreen> {
       key: _scaffoldKey,
       body: Stack(
         children: [
-          // 배경 이미지
-          Container(
-            decoration: BoxDecoration(
-              image: DecorationImage(
-                image: AssetImage("assets/images/note.png"),
-                fit: BoxFit.cover,
-              ),
-            ),
-          ),
           // 좌측 핸들
           Positioned(
             left: 0,

@@ -1,26 +1,34 @@
-
-import { Controller, Get, Query, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Param, NotFoundException, Body, Post } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { chatmessage } from './entities/chat-message.entity';
+import { CreateChatDto } from './dto/create-chat.dto';
 
-@Controller('chat')
+@Controller('rooms/:roomId/chats')
 export class ChatController {
   constructor(private readonly chatService: ChatService) {}
 
   @Get('logs')
   async getChatLogsByRoom(
-    @Query('roomCode') roomCode: string,
+    @Param('roomId') roomId: string,
   ): Promise<chatmessage[]> {
-    if (!roomCode) {
-      throw new NotFoundException('방 코드가 필요합니다.');
+    if (!roomId) {
+      throw new NotFoundException('방 ID가 필요합니다.');
     }
 
-    const messages = await this.chatService.getMessages(roomCode);
+    const messages = await this.chatService.getMessages(roomId);
 
     if (!messages || messages.length === 0) {
-      throw new NotFoundException(`방 ${roomCode}에 채팅 기록이 없습니다.`);
+      throw new NotFoundException(`방 ${roomId}에 채팅 기록이 없습니다.`);
     }
 
     return messages;
+  }
+
+  @Post()
+  async createChat(
+    @Param('roomId') roomId: string,
+    @Body() createChatDto: CreateChatDto,
+  ): Promise<chatmessage> {
+    return this.chatService.createChat(createChatDto);
   }
 }

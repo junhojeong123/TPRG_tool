@@ -26,6 +26,9 @@ export class Room {
   @Column({ default: 2, unsigned: true }) // 기본 2명
   maxParticipants: number;
 
+  @Column({ default: true})
+  isPublic: boolean;
+
   @CreateDateColumn({ name: 'created_at' })
   createdAt: Date;
 

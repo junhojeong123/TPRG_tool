@@ -9,19 +9,19 @@ import { Weapon } from './entities/weapon.entity';
 import { SanLoss } from './entities/san-loss.entity';
 import { CharacterOwnershipGuard } from './guards/character-ownership.guard';
 import { CharacterExistsGuard } from './guards/character-exists.guard';
-import { WeaponModule } from './weapon.module';
-import { SkillModule } from './skill.module';
+import { SkillService } from './skill.service';
+import { WeaponService } from './weapon.service';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Character, Stats, Skill, Weapon, SanLoss]),
-    WeaponModule,
-    SkillModule,
   ],
   providers: [
     CharacterService,
     CharacterExistsGuard,
     CharacterOwnershipGuard,
+    SkillService,
+    WeaponService
   ],
   controllers: [CharacterController],
   exports : [CharacterService]

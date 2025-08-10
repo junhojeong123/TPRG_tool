@@ -47,4 +47,10 @@ export class RoomController {
   ): Promise<RoomParticipantDto[]> {
     return this.roomService.getParticipants(roomId);
   }
+
+  // 방 목록 조회
+  @Get()
+  async findAll() {
+    return this.roomService.findAll();
+  }
 }

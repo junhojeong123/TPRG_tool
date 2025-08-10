@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { chatmessage } from './entities/chat-message.entity';
 import { Repository } from 'typeorm';
+import { CreateChatDto } from './dto/create-chat.dto';
 
 @Injectable()
 export class ChatService {
@@ -25,5 +26,10 @@ export class ChatService {
       where: { roomCode },
       order: { timestamp: 'ASC' },
     });
+  }
+
+  async createChat(createChatDto: CreateChatDto) {
+    const newChat = this.chatRepo.create(createChatDto);
+    return this.chatRepo.save(newChat);
   }
 }

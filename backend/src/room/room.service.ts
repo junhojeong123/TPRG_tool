@@ -154,4 +154,9 @@ export class RoomService {
       nickname: p.nickname
     }));
   }
+  async findAll(): Promise<Room[]> {
+    return this.roomRepository.find({
+      relations: ['creator', 'participants'],
+    });
+  }
 }

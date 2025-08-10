@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class AuthService {
   // /auth/signup이 아니라 /users 로 변경
-  static const _baseUrl = 'http://192.168.0.10:3000';
+  static const _baseUrl = 'http://192.168.0.10:4000';
   static const _signUpUrl = '$_baseUrl/users';
   static const _loginUrl = '$_baseUrl/auth/login';
 

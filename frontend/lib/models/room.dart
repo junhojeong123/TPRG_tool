@@ -33,7 +33,8 @@ class Room {
       // id는 서버가 생성해 주므로 보통 POST 요청에는 제외
       'name': name,
       // 공개방일 땐 password를 null로 보내고, 개인방일 때만 값 포함
-      'password': isPublic ? null : password,
+      'password':
+          isPublic ? null : (password?.isEmpty ?? true ? null : password),
       'maxParticipants': capacity,
       'isPublic': isPublic,
     };
