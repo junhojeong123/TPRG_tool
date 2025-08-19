@@ -11,9 +11,9 @@ class ChatMessage {
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
     return ChatMessage(
-      sender: json['sender'] ?? 'Unknown',
-      content: json['content'] ?? '',
-      timestamp: DateTime.parse(json['timestamp']),
+      sender: json['nickname'] ?? json['sender'] ?? 'Unknown',
+      content: json['message'] ?? json['content'] ?? '',
+      timestamp: DateTime.tryParse(json['timestamp'] ?? '') ?? DateTime.now(),
     );
   }
 

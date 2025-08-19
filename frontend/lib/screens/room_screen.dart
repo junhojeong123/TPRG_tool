@@ -88,7 +88,7 @@ class _RoomScreenState extends State<RoomScreen> {
   void initState() {
     super.initState();
     _chatService = ChatService(
-      baseUrl: 'http://localhost:4000',
+      baseUrl: 'http://192.168.0.10:4000',
     ); // Adjust if needed
   }
 

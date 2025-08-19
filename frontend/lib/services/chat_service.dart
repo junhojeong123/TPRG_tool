@@ -8,7 +8,9 @@ class ChatService {
   ChatService({required this.baseUrl});
 
   Future<List<ChatMessage>> getChatMessages(String roomId) async {
-    final response = await http.get(Uri.parse('$baseUrl/rooms/$roomId/chats'));
+    final response = await http.get(
+      Uri.parse('$baseUrl/rooms/$roomId/chats/logs'),
+    );
 
     if (response.statusCode == 200) {
       final List<dynamic> data = json.decode(response.body);

@@ -8,6 +8,7 @@ import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { RoomModule } from './room/room.module';
 import { CharacterModule } from './character/character.module';
+import { DiceModule } from './dice/dice.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { CharacterModule } from './character/character.module';
     AuthModule,
     RoomModule,
     CharacterModule,
+    DiceModule,
   ],
   controllers: [AppController],
   providers: [AppService],

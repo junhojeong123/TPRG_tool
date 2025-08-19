@@ -25,10 +25,16 @@ export class ChatController {
   }
 
   @Post()
-  async createChat(
+    async createChat(
     @Param('roomId') roomId: string,
-    @Body() createChatDto: CreateChatDto,
-  ): Promise<chatmessage> {
-    return this.chatService.createChat(createChatDto);
+    @Body() dto: CreateChatDto, // { sender, message }
+  ) {
+    await this.chatService.saveMessage({
+      roomCode: roomId,
+      senderId: dto.sender,
+      nickname: dto.sender,
+      message: dto.message,
+    });
+  return { ok: true };
   }
 }
