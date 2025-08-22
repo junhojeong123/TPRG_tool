@@ -2,7 +2,7 @@ import 'dart:math';
 import '../services/chat_service.dart';
 import '../models/room.dart';
 import 'package:flutter/material.dart';
-import '../widgets/character_sheet_widget.dart';
+import '../features/character_sheet/character_sheet_router.dart';
 
 class RoomScreen extends StatefulWidget {
   static const String routeName = '/main';
@@ -217,14 +217,12 @@ class _RoomScreenState extends State<RoomScreen> {
                 height: 500,
                 width: 280,
                 child: SingleChildScrollView(
-                  child: CharacterSheetWidget(
-                    name: generalControllers['name']!.text,
-                    hp: 11,
-                    maxHp: 11,
-                    mp: 4,
-                    maxMp: 9,
+                  child: CharacterSheetRouter(
+                    systemId: 'coc7e', // TODO: 필요 시 캐릭터/캠페인 데이터에서 가져오세요.
                     statControllers: statControllers,
                     generalControllers: generalControllers,
+                    hp: 11,
+                    mp: 4,
                     onClose: () {
                       setState(() {
                         selectedCharacterIndex = null;
