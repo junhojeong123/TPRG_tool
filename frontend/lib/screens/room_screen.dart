@@ -1,12 +1,15 @@
 import 'dart:math';
-import '../services/chat_service.dart';
-import '../models/room.dart';
 import 'package:flutter/material.dart';
+
+import '../models/room.dart';
+import '../services/chat_service.dart';
 import '../features/character_sheet/character_sheet_router.dart';
+import '../features/vtt/vtt_canvas.dart';
+// ⬇️ systems 레지스트리 (경로 확인!)
+import '../features/character_sheet/systems.dart';
 
 class RoomScreen extends StatefulWidget {
   static const String routeName = '/main';
-
   final Room room;
 
   const RoomScreen({Key? key, required this.room}) : super(key: key);
@@ -16,80 +19,61 @@ class RoomScreen extends StatefulWidget {
 }
 
 class _RoomScreenState extends State<RoomScreen> {
+  // 백엔드 주소 한 곳에서만 관리
+  static const String _backendBaseUrl = 'http://192.168.0.10:4000';
+
   late final ChatService _chatService;
+
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final TextEditingController _chatController = TextEditingController();
 
+  // 사이드 패널 상태
   int? selectedCharacterIndex;
   bool isRightDrawerOpen = false;
   bool isLeftDrawerOpen = false;
   bool isDicePanelOpen = false;
+
+  // 주사위 패널
   final List<int> diceFaces = [2, 4, 6, 8, 10, 20, 100];
   Map<int, int> diceCounts = {
     for (var f in [2, 4, 6, 8, 10, 20, 100]) f: 0,
-    -1: 0,
+    -1: 0, // 보너스/기타 슬롯 (현재는 미사용)
   };
-  final Map<String, TextEditingController> statControllers = {
-    // 탐사자 특성치
-    // 탐사자 기능 수치(기본값으로)
-    '회계': TextEditingController(text: '5'),
-    '위협': TextEditingController(text: '15'),
-    '관찰력': TextEditingController(text: '25'),
-    '인류학': TextEditingController(text: '1'),
-    '도약': TextEditingController(text: '20'),
-    '은밀행동': TextEditingController(text: '20'),
-    '감정': TextEditingController(text: '5'),
-    '모국어': TextEditingController(text: '0'),
-    '수영': TextEditingController(text: '20'),
-    '고고학': TextEditingController(text: '1'),
-    '법률': TextEditingController(text: '5'),
-    '투척': TextEditingController(text: '20'),
-    '자료조사': TextEditingController(text: '20'),
-    '추적': TextEditingController(text: '10'),
-    '매혹': TextEditingController(text: '15'),
-    '오르기': TextEditingController(text: '20'),
-    '듣기': TextEditingController(text: '20'),
-    '재력': TextEditingController(text: '0'),
-    '열쇠공': TextEditingController(text: '1'),
-    '크툴루신화': TextEditingController(text: '0'),
-    '기계수리': TextEditingController(text: '10'),
-    '변장': TextEditingController(text: '5'),
-    '의료': TextEditingController(text: '1'),
-    '회피': TextEditingController(text: '0'),
-    '자연': TextEditingController(text: '10'),
-    '자동차운전': TextEditingController(text: '20'),
-    '항법': TextEditingController(text: '10'),
-    '전기수리': TextEditingController(text: '10'),
-    '오컬트': TextEditingController(text: '5'),
-    '말재주': TextEditingController(text: '5'),
-    '중장비 조작': TextEditingController(text: '1'),
-    '근접전(격투)': TextEditingController(text: '25'),
-    '설득': TextEditingController(text: '10'),
-    '사격(권총)': TextEditingController(text: '20'),
-    '사격(라/산)': TextEditingController(text: '25'),
-    '심리학': TextEditingController(text: '10'),
-    '정신분석': TextEditingController(text: '1'),
-    '응급처치': TextEditingController(text: '30'),
-    '승마': TextEditingController(text: '5'),
-    '역사': TextEditingController(text: '5'),
-    '손놀림': TextEditingController(text: '10'),
-  };
-  final Map<String, TextEditingController> generalControllers = {
-    'name': TextEditingController(),
-    'sex': TextEditingController(),
-    'age': TextEditingController(),
-    'job': TextEditingController(),
-    '장비': TextEditingController(),
-    '소지품': TextEditingController(),
-    '현금': TextEditingController(text: '0'),
-  };
+
+  // 시스템 라우팅용 ID (Room에서 가져오되 없으면 coc7e)
+  late final String systemId;
+
+  // 시스템 정의를 기반으로 동적으로 만드는 컨트롤러들
+  late Map<String, TextEditingController> statControllers; // 스킬/특성치
+  late Map<String, TextEditingController> generalControllers; // 이름/직업 등
 
   @override
   void initState() {
     super.initState();
-    _chatService = ChatService(
-      baseUrl: 'http://192.168.0.10:4000',
-    ); // Adjust if needed
+    _chatService = ChatService(baseUrl: _backendBaseUrl);
+
+    // Room에 systemId가 있다고 가정(없으면 coc7e)
+    systemId = (widget.room as dynamic).systemId ?? 'coc7e';
+
+    // systems 레지스트리에서 정의(키 목록 & 기본값) 가져오기
+    final defaults = Systems.defaults(systemId) ?? const <String, dynamic>{};
+
+    // 시스템별 표시 필드 키
+    final skillKeys = Systems.skillKeys(systemId) ?? const <String>[];
+    final generalKeys = Systems.generalKeys(systemId) ?? const <String>[];
+
+    // 컨트롤러 생성 (기본값 텍스트 적용)
+    statControllers = {
+      for (final k in skillKeys)
+        k: TextEditingController(text: '${defaults[k] ?? 0}'),
+    };
+    generalControllers = {
+      for (final k in generalKeys)
+        k: TextEditingController(text: '${defaults[k] ?? ''}'),
+    };
+
+    // HP/MP 등 공통 파생값이 rules에 있으면 여기서도 꺼낼 수 있음
+    // ex) final baseHp = defaults['HP'] ?? 10;
   }
 
   void _handleSendClick() async {
@@ -99,14 +83,16 @@ class _RoomScreenState extends State<RoomScreen> {
     try {
       await _chatService.sendChatMessage(
         widget.room.name,
-        '플레이어이름', // Replace with actual nickname or user ID if available
+        '플레이어이름', // TODO: 실제 닉네임 또는 사용자 ID
         text,
       );
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('채팅이 전송되었습니다!')));
+      ).showSnackBar(const SnackBar(content: Text('채팅이 전송되었습니다!')));
       _chatController.clear();
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('채팅 전송 실패: $e')));
@@ -117,10 +103,22 @@ class _RoomScreenState extends State<RoomScreen> {
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
 
+    // Room에 id가 없을 수도 있으니 안전하게 추출
+    final dynamicRid = (widget.room as dynamic).id;
+    final int roomId = (dynamicRid is int) ? dynamicRid : 0;
+
     return Scaffold(
       key: _scaffoldKey,
       body: Stack(
         children: [
+          // === VTT 캔버스: 맨 아래 레이어 (배경/마커) ===
+          Positioned.fill(
+            child: VttCanvas(
+              roomId: roomId, // 방 ID
+              baseUrl: _backendBaseUrl, // 백엔드 주소
+            ),
+          ),
+
           // 좌측 핸들
           Positioned(
             left: 0,
@@ -128,14 +126,12 @@ class _RoomScreenState extends State<RoomScreen> {
             child: Builder(
               builder:
                   (innerContext) => _buildDrawerHandle(
-                    onTap:
-                        () => setState(() {
-                          isLeftDrawerOpen = true;
-                        }),
+                    onTap: () => setState(() => isLeftDrawerOpen = true),
                     icon: Icons.menu,
                   ),
             ),
           ),
+
           // 우측 핸들
           Positioned(
             right: 0,
@@ -143,14 +139,13 @@ class _RoomScreenState extends State<RoomScreen> {
             child: Visibility(
               visible: !isRightDrawerOpen,
               child: _buildDrawerHandle(
-                onTap:
-                    () => setState(() {
-                      isRightDrawerOpen = true;
-                    }),
+                onTap: () => setState(() => isRightDrawerOpen = true),
                 icon: Icons.menu_open,
               ),
             ),
           ),
+
+          // 좌측 Drawer
           if (isLeftDrawerOpen)
             Stack(
               children: [
@@ -165,21 +160,19 @@ class _RoomScreenState extends State<RoomScreen> {
                   left: 300,
                   top: MediaQuery.of(context).size.height * 0.5 - 40,
                   child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        isLeftDrawerOpen = false;
-                      });
-                    },
+                    onTap: () => setState(() => isLeftDrawerOpen = false),
                     child: Container(
                       width: 40,
                       height: 80,
                       color: Colors.black.withOpacity(0.1),
-                      child: Icon(Icons.arrow_back, color: Colors.white),
+                      child: const Icon(Icons.arrow_back, color: Colors.white),
                     ),
                   ),
                 ),
               ],
             ),
+
+          // 우측 Drawer
           if (isRightDrawerOpen)
             Stack(
               children: [
@@ -194,21 +187,22 @@ class _RoomScreenState extends State<RoomScreen> {
                   right: 300,
                   top: MediaQuery.of(context).size.height * 0.5 - 40,
                   child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        isRightDrawerOpen = false;
-                      });
-                    },
+                    onTap: () => setState(() => isRightDrawerOpen = false),
                     child: Container(
                       width: 40,
                       height: 80,
                       color: Colors.black.withOpacity(0.1),
-                      child: Icon(Icons.arrow_forward, color: Colors.white),
+                      child: const Icon(
+                        Icons.arrow_forward,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
                 ),
               ],
             ),
+
+          // 캐릭터 시트 (시스템 라우터)
           if (selectedCharacterIndex != null)
             Positioned(
               right: 300,
@@ -218,21 +212,25 @@ class _RoomScreenState extends State<RoomScreen> {
                 width: 280,
                 child: SingleChildScrollView(
                   child: CharacterSheetRouter(
-                    systemId: 'coc7e', // TODO: 필요 시 캐릭터/캠페인 데이터에서 가져오세요.
-                    statControllers: statControllers,
-                    generalControllers: generalControllers,
-                    hp: 11,
-                    mp: 4,
-                    onClose: () {
-                      setState(() {
-                        selectedCharacterIndex = null;
-                      });
-                    },
+                    systemId: systemId, // ⬅️ 룰북 시스템 적용 (coc7e/dnd5e 등)
+                    statControllers: statControllers, // systems에서 생성한 컨트롤러
+                    generalControllers:
+                        generalControllers, // systems에서 생성한 컨트롤러
+                    hp:
+                        int.tryParse(generalControllers['HP']?.text ?? '') ??
+                        11, // 규칙에 따라 가져오거나 기본값
+                    mp:
+                        int.tryParse(generalControllers['MP']?.text ?? '') ??
+                        4, // 규칙에 따라 가져오거나 기본값
+                    onClose:
+                        () => setState(() => selectedCharacterIndex = null),
                     onSave: _saveCharacter,
                   ),
                 ),
               ),
             ),
+
+          // 주사위 패널
           if (isDicePanelOpen)
             Positioned(
               right: 300,
@@ -248,77 +246,116 @@ class _RoomScreenState extends State<RoomScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
+                        const Text(
                           '주사위 패널',
                           style: TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 8),
                         GridView.count(
                           crossAxisCount: 4,
                           shrinkWrap: true,
                           mainAxisSpacing: 8,
                           crossAxisSpacing: 8,
                           children:
-                              diceFaces
-                                  .map(
-                                    (face) => GestureDetector(
-                                      onTap:
-                                          () => setState(
-                                            () =>
-                                                diceCounts[face] =
-                                                    diceCounts[face]! + 1,
-                                          ),
-                                      onSecondaryTap:
-                                          () => setState(
-                                            () =>
-                                                diceCounts[face] = max(
-                                                  0,
-                                                  diceCounts[face]! - 1,
-                                                ),
-                                          ),
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          border: Border.all(),
-                                          borderRadius: BorderRadius.circular(
-                                            8,
-                                          ),
-                                        ),
-                                        child: Stack(
-                                          alignment: Alignment.center,
-                                          children: [
-                                            Text('d$face'),
-                                            if (diceCounts[face]! > 0)
-                                              Positioned(
-                                                top: 4,
-                                                right: 4,
-                                                child: CircleAvatar(
-                                                  radius: 10,
-                                                  child: Text(
-                                                    '${diceCounts[face]}',
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                    ),
-                                                  ),
+                              diceFaces.map((face) {
+                                return GestureDetector(
+                                  onTap:
+                                      () => setState(
+                                        () =>
+                                            diceCounts[face] =
+                                                diceCounts[face]! + 1,
+                                      ),
+                                  onSecondaryTap:
+                                      () => setState(
+                                        () =>
+                                            diceCounts[face] = max(
+                                              0,
+                                              diceCounts[face]! - 1,
+                                            ),
+                                      ),
+                                  child: Container(
+                                    decoration: BoxDecoration(
+                                      border: Border.all(),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Stack(
+                                      alignment: Alignment.center,
+                                      children: [
+                                        Text('d$face'),
+                                        if (diceCounts[face]! > 0)
+                                          Positioned(
+                                            top: 4,
+                                            right: 4,
+                                            child: CircleAvatar(
+                                              radius: 10,
+                                              child: Text(
+                                                '${diceCounts[face]}',
+                                                style: const TextStyle(
+                                                  fontSize: 12,
                                                 ),
                                               ),
-                                          ],
-                                        ),
-                                      ),
+                                            ),
+                                          ),
+                                      ],
                                     ),
-                                  )
-                                  .toList(),
+                                  ),
+                                );
+                              }).toList(),
                         ),
-                        SizedBox(height: 8),
+                        const SizedBox(height: 8),
                         ElevatedButton(
-                          onPressed: () {
-                            // TODO: Implement roll logic
-                            // Close panel:
-                            setState(() => isDicePanelOpen = false);
+                          onPressed: () async {
+                            final rnd = Random();
+                            final lines = <String>[];
+                            int totalAll = 0;
+
+                            diceCounts.forEach((face, count) {
+                              if (face <= 0 || count <= 0) return; // -1 등 무시
+                              final rolls = <int>[];
+                              for (var i = 0; i < count; i++) {
+                                final roll = rnd.nextInt(face) + 1; // 1..face
+                                rolls.add(roll);
+                                totalAll += roll;
+                              }
+                              final sum = rolls.fold<int>(0, (a, b) => a + b);
+                              lines.add(
+                                'd$face x$count: ${rolls.join(', ')} (합: $sum)',
+                              );
+                            });
+
+                            final msg =
+                                lines.isEmpty
+                                    ? '주사위 선택이 없습니다.'
+                                    : '[주사위]\n' +
+                                        lines.join('\n') +
+                                        '\n총합: ' +
+                                        totalAll.toString();
+
+                            try {
+                              await _chatService.sendChatMessage(
+                                widget.room.name,
+                                '플레이어이름', // TODO: 실제 닉네임/ID
+                                msg,
+                              );
+                            } catch (e) {
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text('주사위 전송 실패: $e')),
+                              );
+                            }
+
+                            setState(() {
+                              isDicePanelOpen = false;
+                              diceCounts = {
+                                for (var f in diceFaces) f: 0,
+                                -1: 0,
+                              }; // 초기화
+                            });
                           },
-                          child: Text('굴리기'),
+                          child: const Text('굴리기'),
                         ),
                       ],
                     ),
@@ -326,16 +363,23 @@ class _RoomScreenState extends State<RoomScreen> {
                 ),
               ),
             ),
-          // 메인 컨텐츠 + 채팅 입력 영역
+
+          // 하단 채팅 입력 영역 (VTT 위에 얹히지만 포인터 방해 없음)
           Column(
             children: [
+              // 가운데 빈 레이어가 포인터를 막지 않도록 IgnorePointer 처리
               Expanded(
-                child: Center(child: Text('', style: TextStyle(fontSize: 28))),
+                child: IgnorePointer(
+                  ignoring: true,
+                  child: const SizedBox.expand(),
+                ),
               ),
-              // 하단 채팅 입력 영역
               Container(
-                padding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                color: Color(0xFFF0F0F0),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                color: const Color(0xFFF0F0F0),
                 child: Row(
                   children: [
                     Expanded(
@@ -343,7 +387,7 @@ class _RoomScreenState extends State<RoomScreen> {
                         controller: _chatController,
                         decoration: InputDecoration(
                           hintText: '채팅을 입력하기...',
-                          contentPadding: EdgeInsets.symmetric(
+                          contentPadding: const EdgeInsets.symmetric(
                             horizontal: 16,
                             vertical: 8,
                           ),
@@ -356,7 +400,7 @@ class _RoomScreenState extends State<RoomScreen> {
                         onSubmitted: (_) => _handleSendClick(),
                       ),
                     ),
-                    SizedBox(width: 8),
+                    const SizedBox(width: 8),
                     InkWell(
                       onTap: () => setState(() => isDicePanelOpen = true),
                       borderRadius: BorderRadius.circular(20),
@@ -367,16 +411,16 @@ class _RoomScreenState extends State<RoomScreen> {
                           color: Colors.grey.shade700,
                           shape: BoxShape.circle,
                         ),
-                        child: Center(
+                        child: const Center(
                           child: Icon(
-                            Icons.play_arrow,
+                            Icons.casino,
                             color: Colors.white,
-                            size: 24,
+                            size: 22,
                           ),
                         ),
                       ),
                     ),
-                    SizedBox(width: 8),
+                    const SizedBox(width: 8),
                     InkWell(
                       onTap: _handleSendClick,
                       borderRadius: BorderRadius.circular(20),
@@ -387,11 +431,11 @@ class _RoomScreenState extends State<RoomScreen> {
                           color: Colors.grey.shade700,
                           shape: BoxShape.circle,
                         ),
-                        child: Center(
+                        child: const Center(
                           child: Icon(
-                            Icons.play_arrow,
+                            Icons.send,
                             color: Colors.white,
-                            size: 24,
+                            size: 20,
                           ),
                         ),
                       ),
@@ -416,22 +460,28 @@ class _RoomScreenState extends State<RoomScreen> {
             child: Center(
               child: ElevatedButton(
                 onPressed: () {},
-                child: Text('NPC 추가'),
                 style: ElevatedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 16,
+                  ),
                 ),
+                child: const Text('NPC 추가'),
               ),
             ),
           ),
-          Divider(height: 1),
+          const Divider(height: 1),
           Expanded(
             child: Center(
               child: ElevatedButton(
                 onPressed: () {},
-                child: Text('오브젝트 추가하기'),
                 style: ElevatedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 16,
+                  ),
                 ),
+                child: const Text('오브젝트 추가하기'),
               ),
             ),
           ),
@@ -450,18 +500,18 @@ class _RoomScreenState extends State<RoomScreen> {
             padding: const EdgeInsets.all(16.0),
             child: ElevatedButton.icon(
               onPressed: () => _addCharacter(context),
-              icon: Icon(Icons.add),
-              label: Text('캐릭터 추가'),
+              icon: const Icon(Icons.add),
+              label: const Text('캐릭터 추가'),
               style: ElevatedButton.styleFrom(
-                minimumSize: Size(double.infinity, 50),
+                minimumSize: const Size(double.infinity, 50),
               ),
             ),
           ),
-          Divider(height: 1),
+          const Divider(height: 1),
           // 캐릭터 리스트 (스크롤 가능)
           Expanded(
             child: ListView.builder(
-              itemCount: 3, // 임시 데이터
+              itemCount: 3, // TODO: 실제 캐릭터 수
               itemBuilder: (context, index) => _buildCharacterCard(index),
             ),
           ),
@@ -474,15 +524,11 @@ class _RoomScreenState extends State<RoomScreen> {
   Widget _buildCharacterCard(int index) {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () {
-        setState(() {
-          selectedCharacterIndex = index;
-        });
-      },
+      onTap: () => setState(() => selectedCharacterIndex = index),
       child: Card(
-        margin: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: const Padding(
+          padding: EdgeInsets.all(12.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -504,16 +550,28 @@ class _RoomScreenState extends State<RoomScreen> {
   void _addCharacter(BuildContext context) {
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text('새 캐릭터가 추가되었습니다!')));
+    ).showSnackBar(const SnackBar(content: Text('새 캐릭터가 추가되었습니다!')));
   }
 
-  void _saveCharacter() {
+  // 캐릭터 저장: systems-불문 공통 포맷으로 묶어서 저장 요청
+  void _saveCharacter() async {
+    final stats = {
+      for (final e in statControllers.entries) e.key: e.value.text,
+    };
+    final general = {
+      for (final e in generalControllers.entries) e.key: e.value.text,
+    };
+
+    final payload = {'systemId': systemId, 'stats': stats, 'general': general};
+
+    // TODO: CharacterApi.save(roomId/characterId, payload);
+    if (!mounted) return;
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text('저장 버튼이 눌렸습니다!')));
+    ).showSnackBar(const SnackBar(content: Text('저장 완료 (Mock)')));
   }
 
-  // Drawer 핸들 위젯
+  // Drawer 핸들
   Widget _buildDrawerHandle({
     required VoidCallback onTap,
     required IconData icon,
@@ -532,8 +590,12 @@ class _RoomScreenState extends State<RoomScreen> {
   @override
   void dispose() {
     _chatController.dispose();
-    // 해제: 일반 컨트롤러
+
+    // 컨트롤러 해제
     for (final c in generalControllers.values) {
+      c.dispose();
+    }
+    for (final c in statControllers.values) {
       c.dispose();
     }
     super.dispose();

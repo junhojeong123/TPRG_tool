@@ -22,7 +22,7 @@
 			"test/*": ["test/*"]
 		},//절대 경로로하면 안돼서 @이면 src로 읽으라고 설절한 것 아니면 상대 경로로 수정
     "allowJs": true,
-    "types": ["node"]
+    "types": ["node", "express", "multer"]
   },
   "include": [
     "src",
