@@ -1,5 +1,7 @@
 import {
   ConflictException,
+  forwardRef,
+  Inject,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
@@ -11,14 +13,18 @@ import { Repository } from 'typeorm';
 import { User } from './entities/user.entity';
 import * as bcrypt from 'bcryptjs';
 import { UpdateUserNicknameRequest } from './dto/update-user-nickname.dto';
-
+import { Transactional } from 'typeorm-transactional';
+import { RoomParticipantService } from '@/room/room-participant.service';
+import { UserDeleteResponseDto } from './dto/user-delete-response.dto';
 
 @Injectable()
 export class UsersService {
   constructor(
     @InjectRepository(User)
     private usersRepository: Repository<User>,
-  ) { }
+    @Inject(forwardRef(() => RoomParticipantService))
+    private roomParticipantService: RoomParticipantService,
+  ) {}
 
   async createUser(createUserDto: CreateUserDto) {
     const { name, nickname, email, password } = createUserDto;
@@ -39,7 +45,12 @@ export class UsersService {
       email: email,
       passwordHash: hashedPassword,
     });
-    return this.usersRepository.save(user);
+    await this.usersRepository.save(user);
+    return {
+      userId: user.id,
+      email: user.email,
+      message: 'Successfully created account',
+    };
   }
 
   async getUserById(id: number): Promise<User> {
@@ -65,19 +76,19 @@ export class UsersService {
 
   // only for authenticating
   async getUserByEmail(email: string): Promise<User> {
-    const user = await this.usersRepository
-      .createQueryBuilder('user')
-      .addSelect('user.passwordHash')
-      .where('user.email = :email', { email })
-      .getOne();
-
-    if (!user) {
-      throw new NotFoundException(
-        `This email ${email} user could not be found`,
-      );
-    }
-
-    return user;
+    return this.usersRepository
+      .findOne({
+        where: { email: email },
+      })
+      .then((user) => {
+        if (user) {
+          return user;
+        } else {
+          throw new NotFoundException(
+            `This email ${email} user could not be found`,
+          );
+        }
+      });
   }
 
   async isUserExists(email: string): Promise<boolean> {
@@ -113,7 +124,7 @@ export class UsersService {
   async updateUserNickname(
     userId: number,
     updateDto: UpdateUserNicknameRequest,
-  ): Promise<User> {
+  ): Promise<{ message: string }> {
     const user = await this.getUserById(userId);
     if (!user) {
       throw new NotFoundException('This user could not be found.');
@@ -128,30 +139,45 @@ export class UsersService {
     }
 
     user.nickname = updateDto.nickname;
-    return this.usersRepository.save(user);
+    await this.usersRepository.save(user);
+    return { message: 'Nickname change successful.' };
   }
 
   async updateUserPassword(
     userId: number,
     updateDto: UpdateUserPasswordRequest,
-  ): Promise<User> {
+  ): Promise<{ message: string }> {
     const user = await this.getUserById(userId);
     if (!user) {
       throw new NotFoundException('This user could not be found.');
     }
     const hashedPassword = await bcrypt.hash(updateDto.password, 10);
     user.passwordHash = hashedPassword;
-    return this.usersRepository.save(user);
+    await this.usersRepository.save(user);
+    return {
+      message: 'Passcode change successful.',
+    };
   }
 
-  async softDeleteUser(userId: number): Promise<void> {
+  @Transactional()
+  async softDeleteUser(userId: number): Promise<UserDeleteResponseDto> {
     const user = await this.getUserById(userId);
     if (!user) {
       throw new NotFoundException('This user could not be found.');
     }
+    await this.roomParticipantService.leaveAllRoomsByUserId(user.id);
     const result = await this.usersRepository.softDelete(userId);
     if (result.affected !== 1) {
-      throw new InternalServerErrorException('Internal Server Error');
+      throw new InternalServerErrorException('User deletion failed');
     }
+    return {
+      message: 'Successfully deleted account',
+      success: true,
+    };
+  }
+
+  // room에서 사용
+  async updateUser(user: User): Promise<User> {
+    return this.usersRepository.save(user);
   }
 }

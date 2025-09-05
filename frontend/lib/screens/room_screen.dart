@@ -3,10 +3,15 @@ import 'package:flutter/material.dart';
 
 import '../models/room.dart';
 import '../services/chat_service.dart';
+import '../models/chat.dart';
 import '../features/character_sheet/character_sheet_router.dart';
 import '../features/vtt/vtt_canvas.dart';
-// ⬇️ systems 레지스트리 (경로 확인!)
+import '../widgets/chat_bubble_widget.dart';
 import '../features/character_sheet/systems.dart';
+import '../systems/core/dice.dart';
+import '../systems/core/rules_engine.dart';
+import '../systems/dnd5e/dnd5e_rules.dart';
+import '../systems/coc7e/coc7e_rules.dart';
 
 class RoomScreen extends StatefulWidget {
   static const String routeName = '/main';
@@ -23,9 +28,12 @@ class _RoomScreenState extends State<RoomScreen> {
   static const String _backendBaseUrl = 'http://192.168.0.10:4000';
 
   late final ChatService _chatService;
+  late final String _playerName;
 
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final TextEditingController _chatController = TextEditingController();
+  final List<ChatMessage> _messages = [];
+  final ScrollController _msgScroll = ScrollController();
 
   // 사이드 패널 상태
   int? selectedCharacterIndex;
@@ -42,6 +50,7 @@ class _RoomScreenState extends State<RoomScreen> {
 
   // 시스템 라우팅용 ID (Room에서 가져오되 없으면 coc7e)
   late final String systemId;
+  late final TrpgRules rules;
 
   // 시스템 정의를 기반으로 동적으로 만드는 컨트롤러들
   late Map<String, TextEditingController> statControllers; // 스킬/특성치
@@ -51,9 +60,12 @@ class _RoomScreenState extends State<RoomScreen> {
   void initState() {
     super.initState();
     _chatService = ChatService(baseUrl: _backendBaseUrl);
+    _playerName =
+        '플레이어'; // TODO: replace with actual current user name when auth/profile is wired
 
     // Room에 systemId가 있다고 가정(없으면 coc7e)
     systemId = (widget.room as dynamic).systemId ?? 'coc7e';
+    rules = systemId == 'dnd5e' ? Dnd5eRules() : Coc7eRules();
 
     // systems 레지스트리에서 정의(키 목록 & 기본값) 가져오기
     final defaults = Systems.defaults(systemId) ?? const <String, dynamic>{};
@@ -76,16 +88,52 @@ class _RoomScreenState extends State<RoomScreen> {
     // ex) final baseHp = defaults['HP'] ?? 10;
   }
 
+  Map<String, dynamic> _collectCurrentData() {
+    final stats = {
+      for (final e in statControllers.entries)
+        e.key: int.tryParse(e.value.text) ?? e.value.text,
+    };
+    final general = {
+      for (final e in generalControllers.entries)
+        e.key: int.tryParse(e.value.text) ?? e.value.text,
+    };
+    return {'stats': stats, 'general': general};
+  }
+
+  Map<String, dynamic> _deriveCurrent() {
+    final d = rules.derive(_collectCurrentData());
+    // 일부 룰은 {derived:{...}} 형태를 반환할 수 있어 평탄화 처리
+    if (d['derived'] is Map) return Map<String, dynamic>.from(d['derived']);
+    return Map<String, dynamic>.from(d);
+  }
+
   void _handleSendClick() async {
     final text = _chatController.text.trim();
     if (text.isEmpty) return;
 
     try {
       await _chatService.sendChatMessage(
-        widget.room.name,
-        '플레이어이름', // TODO: 실제 닉네임 또는 사용자 ID
+        '${(widget.room as dynamic).id ?? ''}',
+        _playerName,
         text,
       );
+      setState(() {
+        _messages.add(
+          ChatMessage(
+            sender: _playerName,
+            content: text,
+            timestamp: DateTime.now(),
+          ),
+        );
+      });
+      await Future.delayed(const Duration(milliseconds: 50));
+      if (_msgScroll.hasClients) {
+        _msgScroll.animateTo(
+          _msgScroll.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+        );
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
@@ -202,6 +250,38 @@ class _RoomScreenState extends State<RoomScreen> {
               ],
             ),
 
+          // 파생치 요약 배지 (룰별로 핵심만 표시)
+          Positioned(
+            left: 16,
+            top: 40,
+            child: Builder(
+              builder: (context) {
+                final derived = _deriveCurrent();
+                List<Widget> chips = [];
+                if (systemId == 'dnd5e') {
+                  final prof = derived['proficiency'];
+                  final mods = derived['mods'];
+                  chips.add(Chip(label: Text('PROF +${prof ?? '-'}')));
+                  if (mods is Map && mods['DEX'] != null) {
+                    chips.add(Chip(label: Text('DEX mod ${mods['DEX']}')));
+                  }
+                } else if (systemId == 'coc7e') {
+                  final hp = derived['hp'] ?? derived['maxHp'];
+                  final mp = derived['mp'] ?? derived['maxMp'];
+                  final san = derived['SAN'];
+                  final mov = derived['MOV'];
+                  final db = derived['DB'];
+                  if (hp != null) chips.add(Chip(label: Text('HP ${hp}')));
+                  if (mp != null) chips.add(Chip(label: Text('MP ${mp}')));
+                  if (san != null) chips.add(Chip(label: Text('SAN ${san}')));
+                  if (mov != null) chips.add(Chip(label: Text('MOV ${mov}')));
+                  if (db != null) chips.add(Chip(label: Text('DB ${db}')));
+                }
+                if (chips.isEmpty) return const SizedBox.shrink();
+                return Wrap(spacing: 8, children: chips);
+              },
+            ),
+          ),
           // 캐릭터 시트 (시스템 라우터)
           if (selectedCharacterIndex != null)
             Positioned(
@@ -308,22 +388,16 @@ class _RoomScreenState extends State<RoomScreen> {
                         const SizedBox(height: 8),
                         ElevatedButton(
                           onPressed: () async {
-                            final rnd = Random();
                             final lines = <String>[];
                             int totalAll = 0;
 
                             diceCounts.forEach((face, count) {
                               if (face <= 0 || count <= 0) return; // -1 등 무시
-                              final rolls = <int>[];
-                              for (var i = 0; i < count; i++) {
-                                final roll = rnd.nextInt(face) + 1; // 1..face
-                                rolls.add(roll);
-                                totalAll += roll;
-                              }
-                              final sum = rolls.fold<int>(0, (a, b) => a + b);
-                              lines.add(
-                                'd$face x$count: ${rolls.join(', ')} (합: $sum)',
-                              );
+                              final expr = '${count}d$face';
+                              final r = Dice.roll(expr);
+                              totalAll += r.total;
+                              // r.detail이 각 개별 주사위 눈 정보를 포함한다고 가정
+                              lines.add('$expr: ${r.detail} = ${r.total}');
                             });
 
                             final msg =
@@ -336,8 +410,8 @@ class _RoomScreenState extends State<RoomScreen> {
 
                             try {
                               await _chatService.sendChatMessage(
-                                widget.room.name,
-                                '플레이어이름', // TODO: 실제 닉네임/ID
+                                '${(widget.room as dynamic).id ?? ''}',
+                                _playerName,
                                 msg,
                               );
                             } catch (e) {
@@ -352,7 +426,7 @@ class _RoomScreenState extends State<RoomScreen> {
                               diceCounts = {
                                 for (var f in diceFaces) f: 0,
                                 -1: 0,
-                              }; // 초기화
+                              };
                             });
                           },
                           child: const Text('굴리기'),
@@ -402,6 +476,26 @@ class _RoomScreenState extends State<RoomScreen> {
                     ),
                     const SizedBox(width: 8),
                     InkWell(
+                      onTap: _openChatPanel,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade700,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.chat_bubble,
+                            color: Colors.white,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    InkWell(
                       onTap: () => setState(() => isDicePanelOpen = true),
                       borderRadius: BorderRadius.circular(20),
                       child: Container(
@@ -447,6 +541,59 @@ class _RoomScreenState extends State<RoomScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _openChatPanel() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) {
+        final height = MediaQuery.of(context).size.height * 0.65;
+        return SizedBox(
+          height: height,
+          child: Column(
+            children: [
+              const SizedBox(height: 8),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.black26,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                '채팅',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const Divider(height: 16),
+              Expanded(
+                child: ListView.builder(
+                  controller: _msgScroll,
+                  itemCount: _messages.length,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  itemBuilder: (context, i) {
+                    final m = _messages[i];
+                    return ChatBubbleWidget(
+                      message: m.content,
+                      playerName: _playerName,
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -555,14 +702,24 @@ class _RoomScreenState extends State<RoomScreen> {
 
   // 캐릭터 저장: systems-불문 공통 포맷으로 묶어서 저장 요청
   void _saveCharacter() async {
-    final stats = {
-      for (final e in statControllers.entries) e.key: e.value.text,
-    };
-    final general = {
-      for (final e in generalControllers.entries) e.key: e.value.text,
-    };
+    final data = _collectCurrentData();
 
-    final payload = {'systemId': systemId, 'stats': stats, 'general': general};
+    // 1) 검증
+    final issues = rules.validate(data);
+    if (issues.isNotEmpty) {
+      final first = issues.first;
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('저장 실패: ${first.message}')));
+      return;
+    }
+
+    // 2) 파생치 계산
+    final derived = _deriveCurrent();
+
+    // 3) 페이로드 구성 (룰 식별자 포함)
+    final payload = {'systemId': systemId, 'data': data, 'derived': derived};
 
     // TODO: CharacterApi.save(roomId/characterId, payload);
     if (!mounted) return;
@@ -590,6 +747,7 @@ class _RoomScreenState extends State<RoomScreen> {
   @override
   void dispose() {
     _chatController.dispose();
+    _msgScroll.dispose();
 
     // 컨트롤러 해제
     for (final c in generalControllers.values) {

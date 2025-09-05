@@ -64,19 +64,86 @@ class _Dnd5eSheetState extends State<Dnd5eSheet> {
   }
 
   Map<String, dynamic> _collect() {
-    final m = <String, dynamic>{};
-    widget.stat.forEach((k, c) => m[k] = _parse(c.text));
-    widget.general.forEach((k, c) => m[k] = _parse(c.text));
-    return m;
+    final stats = <String, dynamic>{};
+    final general = <String, dynamic>{};
+    widget.stat.forEach((k, c) => stats[k] = _parse(c.text));
+    widget.general.forEach((k, c) => general[k] = _parse(c.text));
+    return {'stats': stats, 'general': general};
+  }
+
+  int _asInt(dynamic v, {int orElse = 0}) {
+    if (v is int) return v;
+    if (v is double) return v.floor();
+    if (v is String) return int.tryParse(v) ?? orElse;
+    return orElse;
+  }
+
+  bool _asBool(dynamic v) {
+    if (v is bool) return v;
+    if (v is String) return v.toLowerCase() == 'true';
+    return false;
+  }
+
+  int _mod(int score) => ((score - 10) / 2).floor();
+
+  int _profByLevel(int level) {
+    if (level <= 4) return 2;
+    if (level <= 8) return 3;
+    if (level <= 12) return 4;
+    if (level <= 16) return 5;
+    return 6;
   }
 
   void _recalc() {
-    final d = widget.rules.derive(_collect());
+    final data = _collect();
+    final stats = Map<String, dynamic>.from(data['stats'] ?? {});
+    final general = Map<String, dynamic>.from(data['general'] ?? {});
+
+    // Run rules derive
+    final d = widget.rules.derive(data);
+    // derive may return nested under 'derived'
+    final Map<String, dynamic> derived = Map<String, dynamic>.from(
+      (d['derived'] is Map) ? d['derived'] as Map : d,
+    );
+
+    // ability mods
+    final mods = Map<String, int>.from(
+      (derived['mods'] is Map)
+          ? Map<String, dynamic>.from(
+            derived['mods'],
+          ).map((k, v) => MapEntry(k, _asInt(v)))
+          : const {},
+    );
+
+    // proficiency bonus (fallback from level)
+    final prof = _asInt(
+      derived['proficiency'],
+      orElse: _profByLevel(_asInt(general['level'], orElse: 1)),
+    );
+
+    // AC calculation (fallback if rules didn't supply): baseAC + DEX mod + (shield?+2)
+    int ac = _asInt(derived['AC'], orElse: -999);
+    if (ac == -999) {
+      final baseAC = _asInt(general['baseAC'], orElse: 10);
+      final dex = _asInt(stats['DEX'], orElse: 10);
+      final shield = _asBool(general['shield']);
+      ac = baseAC + _mod(dex) + (shield ? 2 : 0);
+    }
+
+    // Passive Perception: 10 + WIS mod + (proficiency if proficient)
+    int passive = _asInt(derived['passivePerception'], orElse: -999);
+    if (passive == -999) {
+      final wis = _asInt(stats['WIS'], orElse: 10);
+      final wisMod = _mod(wis);
+      final perceptProf = _asBool(general['perceptionProficient']);
+      passive = 10 + wisMod + (perceptProf ? prof : 0);
+    }
+
     setState(() {
-      _ac = (d['AC'] ?? 10) as int;
-      _prof = (d['prof'] ?? 2) as int;
-      _passive = (d['passivePerception'] ?? 10) as int;
-      _mods = Map<String, int>.from(d['mods'] ?? const {});
+      _ac = ac;
+      _prof = prof;
+      _passive = passive;
+      _mods = mods;
     });
   }
 
@@ -126,6 +193,11 @@ class _Dnd5eSheetState extends State<Dnd5eSheet> {
               ),
 
               const SizedBox(height: 16),
+              Text(
+                'Rolls',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
 
               // ↓ 필요 시 D&D 전용 입력/장비/공격/주문 섹션을 여기에 추가하세요.
               Row(

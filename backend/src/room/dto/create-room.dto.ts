@@ -6,32 +6,47 @@ import {
   Max,
   MinLength,
   MaxLength,
-  IsBoolean,
   IsOptional,
+  IsIn,
 } from 'class-validator';
+import { ROOM_ERRORS } from '../constants/room.constants';
 
 export class CreateRoomDto {
-  @ApiProperty({ description: '방 이름 (1~50자)' })
+  @ApiProperty({
+    description: '방 이름 (1~50자)',
+    example: '고블린 사냥',
+  })
   @IsString()
-  @MinLength(1)
-  @MaxLength(50)
+  @MinLength(1, { message: ROOM_ERRORS.INVALID_ROOM_NAME })
+  @MaxLength(50, { message: ROOM_ERRORS.INVALID_ROOM_NAME_LENGTH })
   name: string;
 
-  @ApiProperty({ description: '비밀번호 (4자 이상)' })
-  @IsOptional()
+  @ApiProperty({
+    description: '방 비밀번호 (변경 불가)',
+    example: '123',
+  })
   @IsString()
-  @MinLength(4)
-  password?: string | null;
+  @MinLength(1, { message: ROOM_ERRORS.PASSWORD_REQUIRED })
+  password: string;
 
-  @ApiProperty({ description: '최대 참여자 수 (2~8)', default: 2 })
+  @ApiProperty({
+    description: '최대 참여자 수 (2~8)',
+    default: 2,
+    minimum: 2,
+    maximum: 8,
+  })
   @IsInt()
-  @Min(2)
-  @Max(8)
-  maxParticipants: number = 2;
-
-  @ApiProperty({ description: '방 공개 여부', default: true})
+  @Min(2, { message: ROOM_ERRORS.INVALID_MAX_PARTICIPANTS_MIN })
+  @Max(8, { message: ROOM_ERRORS.INVALID_MAX_PARTICIPANTS_MAX })
   @IsOptional()
-  @IsBoolean()
-  isPublic: boolean = true;
-}
+  maxParticipants?: number = 2;
 
+  @ApiProperty({
+    description: '룰 시스템 ID',
+    enum: ['coc7e', 'dnd5e'],
+    example: 'coc7e',
+  })
+  @IsString()
+  @IsIn(['coc7e', 'dnd5e'])
+  systemId: string;
+  }
