@@ -5,15 +5,13 @@ import { Inject } from '@nestjs/common';
 import { Marker } from '../../entities/marker.entity';
 
 @QueryHandler(GetMarkersBySceneQuery)
-export class GetMarkersBySceneHandler implements IQueryHandler<GetMarkersBySceneQuery> {
+export class GetMarkersBySceneHandler implements IQueryHandler<GetMarkersBySceneQuery, Marker[]> {
   constructor(
     @Inject(IMarkerRepository)
     private readonly markerRepository: IMarkerRepository,
   ) {}
 
-  async execute(query: GetMarkersBySceneQuery): Promise<Marker> {
-    const { sceneId } = query;
-    // 리포지토리를 통해 데이터를 조회하는 로직만 수행합니다.
-    return this.markerRepository.findAllBySceneId(sceneId);
+  async execute(query: GetMarkersBySceneQuery): Promise<Marker[]> {
+    return this.markerRepository.findAllBySceneId(query.sceneId);
   }
 }

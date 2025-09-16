@@ -11,7 +11,8 @@ export class MoveMarkerHandler implements ICommandHandler<MoveMarkerCommand> {
     private readonly markerRepository: IMarkerRepository,
   ) {}
 
-  async execute(command: MoveMarkerCommand): Promise<Marker> {
+  // 수정: 반환 타입을 Promise<Marker>로 명확하게 명시
+  async execute(command: MoveMarkerCommand): Promise<Marker[]> {
     const { markerId, newPosition } = command;
 
     const marker = await this.markerRepository.findById(markerId);
@@ -19,10 +20,8 @@ export class MoveMarkerHandler implements ICommandHandler<MoveMarkerCommand> {
       throw new NotFoundException(`Marker with ID "${markerId}" not found`);
     }
 
-    // 비즈니스 로직: 위치를 업데이트합니다.
     marker.position = newPosition;
 
-    // 변경된 상태를 데이터베이스에 저장합니다.
     return this.markerRepository.save(marker);
   }
 }

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, Repository, QueryRunner } from 'typeorm';
 import { Vtt, VttStatus } from './entities/vtt.entity';
 import { VttCue } from './entities/vtt-cue.entity';
 
@@ -45,7 +45,7 @@ export class VttRepository extends Repository<Vtt> {
   // 트랜잭션 내에서 실행되어야 데이터 정합성을 보장합니다.
   async saveProcessedVtt(
     vttId: string,
-    cues: Partial<VttCue>,
+    cues: Partial<VttCue>[],  // 수정: 단일 객체 → 객체 배열
     language: string,
   ): Promise<void> {
     // TypeORM의 QueryRunner를 사용하여 트랜잭션을 직접 제어합니다.
@@ -58,7 +58,7 @@ export class VttRepository extends Repository<Vtt> {
       // 큐 데이터를 벌크 삽입합니다.
       // 수천 개의 큐를 하나씩 save()하는 것보다 훨씬 효율적입니다.
       await queryRunner.manager.getRepository(VttCue).save(
-        cues.map((cue) => ({...cue, vttId })),
+        cues.map((cue) => ({ ...cue, vttId })),
       );
 
       // VTT의 상태를 COMPLETED로 업데이트합니다.

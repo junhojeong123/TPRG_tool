@@ -46,7 +46,7 @@ export class VttResponseDto {
 
   @Expose()
   @Type(() => VttCueDto)
-  @ApiProperty({ type:, description: 'VTT에 포함된 큐 목록' })
+  @ApiProperty({ type: , description: 'VTT에 포함된 큐 목록' })
   cues: VttCueDto;
 
   @Expose()

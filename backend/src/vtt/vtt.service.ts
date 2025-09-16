@@ -46,7 +46,7 @@ export class VttService {
       }
 
       // 2. 파싱된 큐 데이터를 데이터베이스에 저장할 형태로 변환합니다.
-      const cuesToSave: Partial<VttCue> = parsedVtt.cues.map((cue) => ({
+      const cuesToSave: Partial<VttCue>[] = parsedVtt.cues.map((cue) => ({
         identifier: cue.identifier,
         startTime: cue.start,
         endTime: cue.end,
@@ -54,9 +54,7 @@ export class VttService {
       }));
 
       // 3. 언어 메타데이터를 추출합니다. (예: 파일 헤더 또는 별도 로직)
-      const language = this.extractLanguage(fileContent) |
-
-| 'en';
+      const language = this.extractLanguage(fileContent) || 'en';
 
       // 4. 리포지토리를 통해 트랜잭션 내에서 큐 데이터를 저장하고 VTT 상태를 업데이트합니다.
       await this.vttRepository.saveProcessedVtt(vttId, cuesToSave, language);
@@ -84,6 +82,6 @@ export class VttService {
   // 간단한 언어 추출 로직 예시
   private extractLanguage(content: string): string | null {
     const match = content.match(/Language: (\w+)/);
-    return match? match[1] : null;
+    return match ? match[1] : null;
   }
 }

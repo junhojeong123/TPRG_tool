@@ -15,7 +15,8 @@ export class MarkerRepository implements IMarkerRepository {
     return this.markerTypeOrmRepo.findOneBy({ id });
   }
 
-  async findAllBySceneId(sceneId: string): Promise<Marker> {
+  // 수정: 반환 타입을 Marker[]로 변경
+  async findAllBySceneId(sceneId: string): Promise<Marker[]> {
     return this.markerTypeOrmRepo.find({ where: { sceneId } });
   }
 

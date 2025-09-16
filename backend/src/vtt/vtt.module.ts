@@ -1,3 +1,4 @@
+// backend/src/vtt/vtt.module.ts  (예시 경로)
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { BullModule } from '@nestjs/bull';
@@ -9,16 +10,21 @@ import { VttCue } from './entities/vtt-cue.entity';
 import { VttProcessor } from './vtt.processor';
 
 @Module({
-  imports:),
-    // 'vtt-parsing'이라는 이름의 큐를 등록합니다.
-    // 이 이름은 서비스에서 큐를 주입받을 때와 프로세서에서 작업을 수신할 때 사용됩니다.
+  imports: [
+    // TypeORM에 엔티티 등록 (Repository 주입/사용을 위해)
+    TypeOrmModule.forFeature([Vtt, VttCue]),
+
+    // Bull 큐 등록 — 'vtt-parsing' 이름을 서비스/프로세서에서 사용합니다.
     BullModule.registerQueue({
       name: 'vtt-parsing',
     }),
   ],
   controllers: [VttController],
-  // VttService, VttRepository, VttProcessor를 이 모듈의 프로바이더로 등록하여
-  // NestJS의 의존성 주입(DI) 컨테이너가 관리하도록 합니다.
-  providers:,
+  providers: [
+    VttService,
+    VttRepository,
+    VttProcessor,
+  ],
+  exports: [VttService], // 필요시 export
 })
 export class VttModule {}
