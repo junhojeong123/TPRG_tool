@@ -1,32 +1,54 @@
 import {
-  WebSocketGateway, WebSocketServer, SubscribeMessage,
-  OnGatewayConnection, OnGatewayDisconnect, MessageBody
+  SubscribeMessage,
+  WebSocketGateway,
+  WebSocketServer,
+  MessageBody,
+  ConnectedSocket,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
+import { CommandBus, QueryBus } from '@nestjs/cqrs';
+import { MoveMarkerCommand } from './commands/impl/move-marker.command';
+import { Logger, UseGuards } from '@nestjs/common';
+import { WsAuthGuard } from '../../auth/ws-auth.guard';
+import { GetMarkersBySceneQuery } from './queries/impl/get-markers-by-scene.query';
 
+@UseGuards(WsAuthGuard) // 게이트웨이 전체에 인증 가드를 적용합니다.
 @WebSocketGateway({ namespace: '/vtt' })
-export class MarkersGateway implements OnGatewayConnection, OnGatewayDisconnect {
-  @WebSocketServer() server: Server;
+export class MarkersGateway {
+  @WebSocketServer()
+  private server: Server;
+  private readonly logger = new Logger(MarkersGateway.name);
 
-  handleConnection(_client: Socket) {}
-  handleDisconnect(_client: Socket) {}
+  constructor(
+    private readonly commandBus: CommandBus,
+    private readonly queryBus: QueryBus,
+  ) {}
 
-  broadcast(event: string, payload: any) {
-    this.server.emit(event, payload);
+  @SubscribeMessage('markers:move')
+  async handleMarkerMove(
+    @MessageBody() data: { markerId: string; position: { x: number; y: number }; sceneId: string },
+    @ConnectedSocket() client: Socket,
+  ): Promise<void> {
+    this.logger.log(`Received marker move event: ${JSON.stringify(data)}`);
+
+    const command = new MoveMarkerCommand(data.markerId, data.position, data.sceneId);
+    const updatedMarker = await this.commandBus.execute(command);
+
+    client.broadcast.to(data.sceneId).emit('markers:updated', updatedMarker);
   }
 
-  @SubscribeMessage('moveMarker')
-  handleMoveMarker(@MessageBody() body: { sessionId: string; sceneId: number; marker: any }) {
-    this.server.emit('markerMoved', body);
-  }
+  @SubscribeMessage('scene:join')
+  async handleSceneJoin(
+    @MessageBody() data: { sceneId: string },
+    @ConnectedSocket() client: Socket,
+  ): Promise<void> {
+    client.join(data.sceneId);
+    this.logger.log(`Client ${client.id} joined scene (room): ${data.sceneId}`);
 
-  @SubscribeMessage('createMarker')
-  handleCreateMarker(@MessageBody() body: { sessionId: string; sceneId: number; marker: any }) {
-    this.server.emit('markerCreated', body);
-  }
+    const markers = await this.queryBus.execute(
+      new GetMarkersBySceneQuery(data.sceneId),
+    );
 
-  @SubscribeMessage('deleteMarker')
-  handleDeleteMarker(@MessageBody() body: { sessionId: string; sceneId: number; markerId: number }) {
-    this.server.emit('markerDeleted', body);
+    client.emit('scene:state', markers);
   }
 }
